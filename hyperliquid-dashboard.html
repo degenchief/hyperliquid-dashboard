@@ -248,14 +248,30 @@ Right now both BTC and ETH has touched the lower high, and if I am right it shou
     }
 
     async function fetchFunding() {
-      // Fetch last 90 days of funding
-      const startTime = Date.now() - (90 * 24 * 60 * 60 * 1000);
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'userFunding', user: WALLET, startTime: startTime })
-      });
-      return res.json();
+      // Fetch ALL funding data with pagination (API returns max 500 per request)
+      let allData = [];
+      let startTime = new Date('2024-01-01').getTime(); // Start from 2024
+
+      while (true) {
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'userFunding', user: WALLET, startTime: startTime })
+        });
+        const data = await res.json();
+
+        if (!data || data.length === 0) break;
+        allData = allData.concat(data);
+
+        // If less than 500, we have all data
+        if (data.length < 500) break;
+
+        // Continue from the latest timestamp + 1ms
+        const maxTime = Math.max(...data.map(f => f.time));
+        startTime = maxTime + 1;
+      }
+
+      return allData;
     }
 
     async function fetchFills() {
