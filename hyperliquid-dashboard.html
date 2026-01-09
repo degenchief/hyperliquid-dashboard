@@ -83,10 +83,20 @@
     .journal-display { background: #0d1117; border-radius: 8px; padding: 15px; line-height: 1.7; white-space: pre-wrap; font-size: 14px; }
     .journal-edit-btn { background: transparent; border: 1px solid #30363d; color: #8b949e; padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
     .journal-edit-btn:hover { border-color: #f0883e; color: #f0883e; }
+    .journal-controls { display: flex; gap: 10px; }
+    .journal-ctrl-btn { background: #21262d; border: 1px solid #30363d; color: #e6edf3; padding: 8px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+    .journal-ctrl-btn:hover { background: #30363d; border-color: #f0883e; }
   </style>
 </head>
 <body>
-  <h1>Hyperliquid Dashboard</h1>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+    <h1 style="margin:0;">Hyperliquid Dashboard</h1>
+    <div class="journal-controls">
+      <button class="journal-ctrl-btn" onclick="exportJournal()" title="Download backup of all journal entries">Export Journal</button>
+      <button class="journal-ctrl-btn" onclick="document.getElementById('import-file').click()" title="Restore journal from backup file">Import Journal</button>
+      <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJournal(event)">
+    </div>
+  </div>
 
   <div class="tabs">
     <div class="tab active" data-tab="funding">Funding</div>
@@ -143,6 +153,57 @@
     function getAllNoteDates() {
       const notes = JSON.parse(localStorage.getItem('hl-journal') || '{}');
       return Object.keys(notes);
+    }
+
+    function exportJournal() {
+      const notes = JSON.parse(localStorage.getItem('hl-journal') || '{}');
+      const noteCount = Object.keys(notes).length;
+      if (noteCount === 0) {
+        alert('No journal entries to export.');
+        return;
+      }
+      const data = {
+        exportDate: new Date().toISOString(),
+        noteCount: noteCount,
+        entries: notes
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'trading-journal-' + new Date().toISOString().split('T')[0] + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      alert('Journal exported! ' + noteCount + ' entries saved.');
+    }
+
+    function importJournal(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = JSON.parse(e.target.result);
+          const entries = data.entries || data;
+          const existingNotes = JSON.parse(localStorage.getItem('hl-journal') || '{}');
+          const existingCount = Object.keys(existingNotes).length;
+          const importCount = Object.keys(entries).length;
+
+          // Merge: imported entries will overwrite existing ones for same dates
+          const merged = { ...existingNotes, ...entries };
+          localStorage.setItem('hl-journal', JSON.stringify(merged));
+
+          const newCount = Object.keys(merged).length;
+          alert('Journal imported! ' + importCount + ' entries loaded. Total entries: ' + newCount);
+          refreshCalendars();
+        } catch (err) {
+          alert('Error importing journal: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = ''; // Reset file input
     }
 
     // Pre-populate example note for demo
