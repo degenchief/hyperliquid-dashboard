@@ -556,11 +556,11 @@ Right now both BTC and ETH has touched the lower high, and if I am right it shou
           const amount = dayData ? (isPnl || isCombined ? dayData.pnl : dayData.amount) : 0;
           const hasData = amount !== 0;
           const hasNoteForDay = hasNote(dateStr);
-          const isClickable = hasData || hasNoteForDay;
           const clickFn = isPnl && !isCombined ? 'showTradeDetails' : 'showFundingDetails';
 
           const noteClass = hasNoteForDay ? ' has-note' : '';
-          html += '<div class="day' + noteClass + (isClickable ? ' clickable" onclick="' + clickFn + '(\'' + dateStr + '\')"' : '"') + '>';
+          // All days are clickable for journaling
+          html += '<div class="day' + noteClass + ' clickable" onclick="' + clickFn + '(\'' + dateStr + '\')">';
           html += '<div class="day-number">' + d + '</div>';
           if (hasNoteForDay) html += '<span class="note-indicator">📝</span>';
           if (hasData) {
