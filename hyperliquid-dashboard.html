@@ -94,7 +94,6 @@
     <div class="journal-controls">
       <button class="journal-ctrl-btn" onclick="exportJournal()" title="Download backup of all journal entries">Export Journal</button>
       <button class="journal-ctrl-btn" onclick="document.getElementById('import-file').click()" title="Restore journal from backup file">Import Journal</button>
-      <button class="journal-ctrl-btn" onclick="clearJournal()" title="Clear all journal entries (for testing)" style="color:#f85149;">Clear All</button>
       <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJournal(event)">
     </div>
   </div>
@@ -205,20 +204,6 @@
       };
       reader.readAsText(file);
       event.target.value = ''; // Reset file input
-    }
-
-    function clearJournal() {
-      const notes = JSON.parse(localStorage.getItem('hl-journal') || '{}');
-      const count = Object.keys(notes).length;
-      if (count === 0) {
-        alert('Journal is already empty.');
-        return;
-      }
-      if (confirm('Delete all ' + count + ' journal entries? Make sure you have a backup!')) {
-        localStorage.removeItem('hl-journal');
-        alert('Journal cleared.');
-        refreshCalendars();
-      }
     }
 
     // Pre-populate example note for demo
