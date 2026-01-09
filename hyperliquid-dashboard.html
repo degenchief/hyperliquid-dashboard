@@ -6,14 +6,18 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #0d1117; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; }
     h1 { margin-bottom: 20px; font-size: 28px; }
-    .tabs { display: flex; gap: 0; margin-bottom: 25px; border-bottom: 1px solid #30363d; }
+    .tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 1px solid #30363d; }
     .tab { padding: 12px 24px; cursor: pointer; color: #8b949e; border-bottom: 2px solid transparent; transition: all 0.2s; font-size: 16px; }
     .tab:hover { color: #e6edf3; }
     .tab.active { color: #e6edf3; border-bottom: 2px solid #3fb950; }
+    .year-tabs { display: flex; gap: 8px; margin-bottom: 25px; }
+    .year-tab { padding: 8px 20px; cursor: pointer; color: #8b949e; background: #161b22; border-radius: 6px; transition: all 0.2s; font-size: 14px; font-weight: 500; }
+    .year-tab:hover { color: #e6edf3; background: #21262d; }
+    .year-tab.active { color: #e6edf3; background: #238636; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
     .month { margin-bottom: 40px; }
-    .month-header { font-size: 24px; margin-bottom: 15px; display: flex; gap: 15px; align-items: baseline; flex-wrap: wrap; }
+    .month-header { font-size: 22px; margin-bottom: 15px; display: flex; gap: 15px; align-items: baseline; flex-wrap: wrap; }
     .month-name { color: #e6edf3; }
     .month-total { font-weight: bold; }
     .month-total.positive { color: #3fb950; }
@@ -31,11 +35,14 @@
     .day-amount.negative { color: #f85149; }
     .day-trades { font-size: 10px; color: #8b949e; margin-top: 3px; }
     .loading { text-align: center; padding: 50px; color: #8b949e; }
-    .summary { background: #161b22; border-radius: 8px; padding: 20px; margin-bottom: 30px; display: flex; gap: 40px; flex-wrap: wrap; }
+    .summary { background: #161b22; border-radius: 8px; padding: 20px; margin-bottom: 25px; display: flex; gap: 40px; flex-wrap: wrap; }
     .summary-label { color: #8b949e; font-size: 14px; }
     .summary-value { font-size: 28px; font-weight: bold; }
     .summary-value.positive { color: #3fb950; }
     .summary-value.negative { color: #f85149; }
+    .year-summary { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px 20px; margin-bottom: 25px; display: flex; gap: 30px; flex-wrap: wrap; }
+    .year-summary-label { color: #8b949e; font-size: 12px; }
+    .year-summary-value { font-size: 22px; font-weight: bold; }
     .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; }
     .modal-overlay.active { display: flex; }
     .modal { background: #161b22; border-radius: 12px; padding: 24px; max-width: 700px; width: 90%; max-height: 80vh; overflow-y: auto; border: 1px solid #30363d; }
@@ -56,18 +63,22 @@
     .trade-side.short { background: #da3633; color: #fff; }
     .trade-pnl.positive { color: #3fb950; }
     .trade-pnl.negative { color: #f85149; }
+    .no-data { text-align: center; padding: 40px; color: #8b949e; }
   </style>
 </head>
 <body>
   <h1>Hyperliquid Dashboard</h1>
+
   <div class="tabs">
     <div class="tab active" data-tab="funding">Funding</div>
     <div class="tab" data-tab="pnl">Realized P&L</div>
     <div class="tab" data-tab="combined">Combined</div>
   </div>
+
   <div id="funding" class="tab-content active"><div class="loading">Loading funding data...</div></div>
   <div id="pnl" class="tab-content"><div class="loading">Loading P&L data...</div></div>
   <div id="combined" class="tab-content"><div class="loading">Loading combined data...</div></div>
+
   <div class="modal-overlay" id="modal">
     <div class="modal">
       <div class="modal-header">
@@ -77,19 +88,24 @@
       <div id="modal-content"></div>
     </div>
   </div>
+
   <script>
     const WALLET = '0x3093189bd4d429CB2F47D03C14b9e9200B6b9425';
     const API_URL = 'https://api.hyperliquid.xyz/info';
     const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     let allFills = [];
     let allFunding = [];
+    let currentTab = 'funding';
+    let currentYears = { funding: null, pnl: null, combined: null };
 
+    // Main tab switching
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         tab.classList.add('active');
-        document.getElementById(tab.dataset.tab).classList.add('active');
+        currentTab = tab.dataset.tab;
+        document.getElementById(currentTab).classList.add('active');
       });
     });
 
@@ -109,7 +125,6 @@
     }
 
     async function fetchFunding() {
-      // Fetch all funding history (no startTime limit)
       const res = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -138,7 +153,6 @@
 
     function groupFillsByDay(fills) {
       const byDay = {};
-      // No time cutoff - include all historical trades
       fills.forEach(f => {
         if (!f.closedPnl || parseFloat(f.closedPnl) === 0) return;
         const date = new Date(f.time).toISOString().split('T')[0];
@@ -149,21 +163,27 @@
       return byDay;
     }
 
-    function groupByMonth(byDay, isPnl) {
-      const months = {};
+    function groupByYearAndMonth(byDay, isPnl) {
+      const years = {};
       Object.entries(byDay).forEach(([date, data]) => {
+        const year = date.substring(0, 4);
         const month = date.substring(0, 7);
-        if (!months[month]) months[month] = { total: 0, trades: 0, days: {} };
+        if (!years[year]) years[year] = { total: 0, trades: 0, months: {} };
+        if (!years[year].months[month]) years[year].months[month] = { total: 0, trades: 0, days: {} };
+
         if (isPnl) {
-          months[month].total += data.pnl;
-          months[month].trades += data.trades;
-          months[month].days[date] = data;
+          years[year].total += data.pnl;
+          years[year].trades += data.trades;
+          years[year].months[month].total += data.pnl;
+          years[year].months[month].trades += data.trades;
+          years[year].months[month].days[date] = data;
         } else {
-          months[month].total += data;
-          months[month].days[date] = { amount: data };
+          years[year].total += data;
+          years[year].months[month].total += data;
+          years[year].months[month].days[date] = { amount: data };
         }
       });
-      return months;
+      return years;
     }
 
     function showTradeDetails(date) {
@@ -224,20 +244,68 @@
     document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-    function renderCalendar(months, containerId, isPnl, isCombined) {
+    function renderYearContent(years, containerId, isPnl, isCombined, selectedYear) {
       const container = document.getElementById(containerId);
-      let grandTotal = 0, totalTrades = 0;
-      Object.values(months).forEach(m => { grandTotal += m.total; totalTrades += m.trades || 0; });
-      const totalClass = grandTotal >= 0 ? 'positive' : 'negative';
+      const sortedYears = Object.keys(years).sort().reverse();
 
-      let html = '<div class="summary"><div class="summary-item"><div class="summary-label">' + (isCombined ? 'Total (Funding + P&L)' : isPnl ? 'Realized P&L' : 'Funding') + ' (All Time)</div><div class="summary-value ' + totalClass + '">' + formatUSDFull(grandTotal) + '</div></div>';
-      if (isPnl || isCombined) html += '<div class="summary-item"><div class="summary-label">Trades</div><div class="summary-value" style="color:#e6edf3">' + totalTrades + '</div></div>';
+      if (sortedYears.length === 0) {
+        container.innerHTML = '<div class="no-data">No data available</div>';
+        return;
+      }
+
+      // Default to most recent year if none selected
+      if (!selectedYear || !years[selectedYear]) {
+        selectedYear = sortedYears[0];
+      }
+      currentYears[containerId] = selectedYear;
+
+      // Calculate all-time total
+      let allTimeTotal = 0, allTimeTrades = 0;
+      Object.values(years).forEach(y => {
+        allTimeTotal += y.total;
+        allTimeTrades += y.trades || 0;
+      });
+      const allTimeClass = allTimeTotal >= 0 ? 'positive' : 'negative';
+
+      let html = '';
+
+      // All-time summary
+      html += '<div class="summary">';
+      html += '<div class="summary-item"><div class="summary-label">' + (isCombined ? 'Total (Funding + P&L)' : isPnl ? 'Realized P&L' : 'Funding') + ' (All Time)</div>';
+      html += '<div class="summary-value ' + allTimeClass + '">' + formatUSDFull(allTimeTotal) + '</div></div>';
+      if (isPnl || isCombined) {
+        html += '<div class="summary-item"><div class="summary-label">Total Trades</div>';
+        html += '<div class="summary-value" style="color:#e6edf3">' + allTimeTrades + '</div></div>';
+      }
       html += '</div>';
 
-      Object.keys(months).sort().reverse().forEach(monthKey => {
-        const month = months[monthKey];
+      // Year tabs
+      html += '<div class="year-tabs">';
+      sortedYears.forEach(year => {
+        const isActive = year === selectedYear ? ' active' : '';
+        html += '<div class="year-tab' + isActive + '" onclick="selectYear(\'' + containerId + '\', \'' + year + '\', ' + isPnl + ', ' + isCombined + ')">' + year + '</div>';
+      });
+      html += '</div>';
+
+      // Year summary
+      const yearData = years[selectedYear];
+      const yearClass = yearData.total >= 0 ? 'positive' : 'negative';
+      html += '<div class="year-summary">';
+      html += '<div class="year-summary-item"><div class="year-summary-label">' + selectedYear + ' Total</div>';
+      html += '<div class="year-summary-value ' + yearClass + '">' + formatUSDFull(yearData.total) + '</div></div>';
+      if (yearData.trades) {
+        html += '<div class="year-summary-item"><div class="year-summary-label">Trades</div>';
+        html += '<div class="year-summary-value" style="color:#e6edf3">' + yearData.trades + '</div></div>';
+      }
+      html += '</div>';
+
+      // Months for selected year
+      const sortedMonths = Object.keys(yearData.months).sort().reverse();
+
+      sortedMonths.forEach(monthKey => {
+        const month = yearData.months[monthKey];
         const [year, monthNum] = monthKey.split('-');
-        const monthName = new Date(year, monthNum - 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+        const monthName = new Date(year, monthNum - 1).toLocaleString('en-US', { month: 'long' });
         const mTotalClass = month.total >= 0 ? 'positive' : 'negative';
 
         html += '<div class="month"><div class="month-header"><span class="month-name">' + monthName + ':</span><span class="month-total ' + mTotalClass + '">' + formatUSDFull(month.total) + '</span>';
@@ -273,6 +341,20 @@
       container.innerHTML = html;
     }
 
+    // Store processed data globally for year switching
+    let fundingYears = {};
+    let pnlYears = {};
+    let combinedYears = {};
+
+    function selectYear(containerId, year, isPnl, isCombined) {
+      let years;
+      if (containerId === 'funding') years = fundingYears;
+      else if (containerId === 'pnl') years = pnlYears;
+      else years = combinedYears;
+
+      renderYearContent(years, containerId, isPnl, isCombined, year);
+    }
+
     async function init() {
       try {
         const [fundingData, fillsData] = await Promise.all([fetchFunding(), fetchFills()]);
@@ -280,10 +362,12 @@
         allFills = fillsData;
 
         const fundingByDay = groupFundingByDay(fundingData);
-        renderCalendar(groupByMonth(fundingByDay, false), 'funding', false, false);
+        fundingYears = groupByYearAndMonth(fundingByDay, false);
+        renderYearContent(fundingYears, 'funding', false, false, null);
 
         const pnlByDay = groupFillsByDay(fillsData);
-        renderCalendar(groupByMonth(pnlByDay, true), 'pnl', true, false);
+        pnlYears = groupByYearAndMonth(pnlByDay, true);
+        renderYearContent(pnlYears, 'pnl', true, false, null);
 
         const combinedByDay = {};
         Object.entries(fundingByDay).forEach(([date, amt]) => {
@@ -295,7 +379,8 @@
           combinedByDay[date].pnl += data.pnl;
           combinedByDay[date].trades += data.trades;
         });
-        renderCalendar(groupByMonth(combinedByDay, true), 'combined', true, true);
+        combinedYears = groupByYearAndMonth(combinedByDay, true);
+        renderYearContent(combinedYears, 'combined', true, true, null);
       } catch (err) {
         document.querySelectorAll('.tab-content').forEach(c => { c.innerHTML = '<div class="loading">Error: ' + err.message + '</div>'; });
       }
