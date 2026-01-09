@@ -109,11 +109,11 @@
     }
 
     async function fetchFunding() {
-      const startTime = Date.now() - (90 * 24 * 60 * 60 * 1000);
+      // Fetch all funding history (no startTime limit)
       const res = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'userFunding', user: WALLET, startTime })
+        body: JSON.stringify({ type: 'userFunding', user: WALLET, startTime: 0 })
       });
       return res.json();
     }
@@ -138,9 +138,8 @@
 
     function groupFillsByDay(fills) {
       const byDay = {};
-      const cutoff = Date.now() - (90 * 24 * 60 * 60 * 1000);
+      // No time cutoff - include all historical trades
       fills.forEach(f => {
-        if (f.time < cutoff) return;
         if (!f.closedPnl || parseFloat(f.closedPnl) === 0) return;
         const date = new Date(f.time).toISOString().split('T')[0];
         if (!byDay[date]) byDay[date] = { pnl: 0, trades: 0 };
@@ -231,7 +230,7 @@
       Object.values(months).forEach(m => { grandTotal += m.total; totalTrades += m.trades || 0; });
       const totalClass = grandTotal >= 0 ? 'positive' : 'negative';
 
-      let html = '<div class="summary"><div class="summary-item"><div class="summary-label">' + (isCombined ? 'Total (Funding + P&L)' : isPnl ? 'Realized P&L' : 'Funding') + ' (90 Days)</div><div class="summary-value ' + totalClass + '">' + formatUSDFull(grandTotal) + '</div></div>';
+      let html = '<div class="summary"><div class="summary-item"><div class="summary-label">' + (isCombined ? 'Total (Funding + P&L)' : isPnl ? 'Realized P&L' : 'Funding') + ' (All Time)</div><div class="summary-value ' + totalClass + '">' + formatUSDFull(grandTotal) + '</div></div>';
       if (isPnl || isCombined) html += '<div class="summary-item"><div class="summary-label">Trades</div><div class="summary-value" style="color:#e6edf3">' + totalTrades + '</div></div>';
       html += '</div>';
 
