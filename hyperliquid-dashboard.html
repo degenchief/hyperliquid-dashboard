@@ -122,6 +122,24 @@
     const WALLET = '0x3093189bd4d429CB2F47D03C14b9e9200B6b9425';
     const API_URL = 'https://api.hyperliquid.xyz/info';
     const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    // Helper: Convert timestamp to local date string (YYYY-MM-DD)
+    // Uses browser's timezone (HKT on your Mac)
+    function toLocalDateStr(timestamp) {
+      const d = new Date(timestamp);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    // Helper: Get local day boundaries (midnight to 23:59:59.999) for filtering
+    function getLocalDayBounds(dateStr) {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const start = new Date(year, month - 1, day, 0, 0, 0, 0).getTime();
+      const end = new Date(year, month - 1, day, 23, 59, 59, 999).getTime();
+      return { start, end };
+    }
     let allFills = [];
     let allFunding = [];
     let currentTab = 'funding';
@@ -272,7 +290,7 @@
     function groupFundingByDay(data) {
       const byDay = {};
       data.forEach(f => {
-        const date = new Date(f.time).toISOString().split('T')[0];
+        const date = toLocalDateStr(f.time);  // Use local timezone (HKT)
         byDay[date] = (byDay[date] || 0) + parseFloat(f.delta.usdc);
       });
       return byDay;
@@ -282,7 +300,7 @@
       const byDay = {};
       fills.forEach(f => {
         if (!f.closedPnl || parseFloat(f.closedPnl) === 0) return;
-        const date = new Date(f.time).toISOString().split('T')[0];
+        const date = toLocalDateStr(f.time);  // Use local timezone (HKT)
         if (!byDay[date]) byDay[date] = { pnl: 0, trades: 0 };
         byDay[date].pnl += parseFloat(f.closedPnl);
         byDay[date].trades += 1;
@@ -397,8 +415,7 @@
       currentModalDate = date;
       if (!isEditingNote) isEditingNote = false;
 
-      const dateStart = new Date(date + 'T00:00:00Z').getTime();
-      const dateEnd = new Date(date + 'T23:59:59Z').getTime();
+      const { start: dateStart, end: dateEnd } = getLocalDayBounds(date);  // Use local timezone (HKT)
       const dayTrades = allFills.filter(f => f.time >= dateStart && f.time <= dateEnd && f.closedPnl && parseFloat(f.closedPnl) !== 0).sort((a, b) => b.time - a.time);
       const totalPnl = dayTrades.reduce((sum, t) => sum + parseFloat(t.closedPnl), 0);
       const totalFees = dayTrades.reduce((sum, t) => sum + parseFloat(t.fee || 0), 0);
@@ -432,8 +449,7 @@
       currentModalDate = date;
       if (!isEditingNote) isEditingNote = false;
 
-      const dateStart = new Date(date + 'T00:00:00Z').getTime();
-      const dateEnd = new Date(date + 'T23:59:59Z').getTime();
+      const { start: dateStart, end: dateEnd } = getLocalDayBounds(date);  // Use local timezone (HKT)
       const dayFunding = allFunding.filter(f => f.time >= dateStart && f.time <= dateEnd);
       const totalFunding = dayFunding.reduce((sum, f) => sum + parseFloat(f.delta.usdc), 0);
       const byCoin = {};
