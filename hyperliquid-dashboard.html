@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Hyperliquid Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0d1117; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; }
+    h1 { margin-bottom: 20px; font-size: 28px; }
+    .tabs { display: flex; gap: 0; margin-bottom: 25px; border-bottom: 1px solid #30363d; }
+    .tab { padding: 12px 24px; cursor: pointer; color: #8b949e; border-bottom: 2px solid transparent; transition: all 0.2s; font-size: 16px; }
+    .tab:hover { color: #e6edf3; }
+    .tab.active { color: #e6edf3; border-bottom: 2px solid #3fb950; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .month { margin-bottom: 40px; }
+    .month-header { font-size: 24px; margin-bottom: 15px; display: flex; gap: 15px; align-items: baseline; flex-wrap: wrap; }
+    .month-name { color: #e6edf3; }
+    .month-total { font-weight: bold; }
+    .month-total.positive { color: #3fb950; }
+    .month-total.negative { color: #f85149; }
+    .month-info { color: #8b949e; font-size: 14px; }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .day-header { text-align: center; padding: 8px; color: #8b949e; font-size: 12px; }
+    .day { background: #161b22; border-radius: 6px; padding: 10px; min-height: 70px; }
+    .day.empty { background: transparent; }
+    .day.clickable { cursor: pointer; transition: background 0.2s; }
+    .day.clickable:hover { background: #21262d; }
+    .day-number { font-size: 11px; color: #8b949e; margin-bottom: 5px; }
+    .day-amount { font-size: 14px; font-weight: 600; }
+    .day-amount.positive { color: #3fb950; }
+    .day-amount.negative { color: #f85149; }
+    .day-trades { font-size: 10px; color: #8b949e; margin-top: 3px; }
+    .loading { text-align: center; padding: 50px; color: #8b949e; }
+    .summary { background: #161b22; border-radius: 8px; padding: 20px; margin-bottom: 30px; display: flex; gap: 40px; flex-wrap: wrap; }
+    .summary-label { color: #8b949e; font-size: 14px; }
+    .summary-value { font-size: 28px; font-weight: bold; }
+    .summary-value.positive { color: #3fb950; }
+    .summary-value.negative { color: #f85149; }
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: #161b22; border-radius: 12px; padding: 24px; max-width: 700px; width: 90%; max-height: 80vh; overflow-y: auto; border: 1px solid #30363d; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #30363d; }
+    .modal-title { font-size: 20px; font-weight: 600; }
+    .modal-close { cursor: pointer; font-size: 24px; color: #8b949e; background: none; border: none; }
+    .modal-close:hover { color: #e6edf3; }
+    .modal-summary { display: flex; gap: 30px; margin-bottom: 20px; padding: 15px; background: #0d1117; border-radius: 8px; flex-wrap: wrap; }
+    .modal-summary-label { font-size: 12px; color: #8b949e; }
+    .modal-summary-value { font-size: 20px; font-weight: 600; }
+    .trades-table { width: 100%; border-collapse: collapse; }
+    .trades-table th { text-align: left; padding: 10px 8px; color: #8b949e; font-weight: 500; font-size: 12px; border-bottom: 1px solid #30363d; }
+    .trades-table td { padding: 10px 8px; font-size: 13px; border-bottom: 1px solid #21262d; }
+    .trades-table tr:hover { background: #21262d; }
+    .trade-coin { font-weight: 600; }
+    .trade-side { font-size: 11px; padding: 2px 6px; border-radius: 4px; }
+    .trade-side.long { background: #238636; color: #fff; }
+    .trade-side.short { background: #da3633; color: #fff; }
+    .trade-pnl.positive { color: #3fb950; }
+    .trade-pnl.negative { color: #f85149; }
+  </style>
+</head>
+<body>
+  <h1>Hyperliquid Dashboard</h1>
+  <div class="tabs">
+    <div class="tab active" data-tab="funding">Funding</div>
+    <div class="tab" data-tab="pnl">Realized P&L</div>
+    <div class="tab" data-tab="combined">Combined</div>
+  </div>
+  <div id="funding" class="tab-content active"><div class="loading">Loading funding data...</div></div>
+  <div id="pnl" class="tab-content"><div class="loading">Loading P&L data...</div></div>
+  <div id="combined" class="tab-content"><div class="loading">Loading combined data...</div></div>
+  <div class="modal-overlay" id="modal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title">Trade Details</div>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div id="modal-content"></div>
+    </div>
+  </div>
+  <script>
+    const WALLET = '0x3093189bd4d429CB2F47D03C14b9e9200B6b9425';
+    const API_URL = 'https://api.hyperliquid.xyz/info';
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    let allFills = [];
+    let allFunding = [];
+
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.tab).classList.add('active');
+      });
+    });
+
+    function formatUSD(amount) {
+      const sign = amount >= 0 ? '+' : '';
+      if (Math.abs(amount) >= 1000) return sign + '$' + (amount / 1000).toFixed(2) + 'K';
+      return sign + '$' + amount.toFixed(0);
+    }
+
+    function formatUSDFull(amount) {
+      const sign = amount >= 0 ? '+' : '';
+      return sign + '$' + Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function formatTime(ts) {
+      return new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    async function fetchFunding() {
+      const startTime = Date.now() - (90 * 24 * 60 * 60 * 1000);
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'userFunding', user: WALLET, startTime })
+      });
+      return res.json();
+    }
+
+    async function fetchFills() {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'userFills', user: WALLET })
+      });
+      return res.json();
+    }
+
+    function groupFundingByDay(data) {
+      const byDay = {};
+      data.forEach(f => {
+        const date = new Date(f.time).toISOString().split('T')[0];
+        byDay[date] = (byDay[date] || 0) + parseFloat(f.delta.usdc);
+      });
+      return byDay;
+    }
+
+    function groupFillsByDay(fills) {
+      const byDay = {};
+      const cutoff = Date.now() - (90 * 24 * 60 * 60 * 1000);
+      fills.forEach(f => {
+        if (f.time < cutoff) return;
+        if (!f.closedPnl || parseFloat(f.closedPnl) === 0) return;
+        const date = new Date(f.time).toISOString().split('T')[0];
+        if (!byDay[date]) byDay[date] = { pnl: 0, trades: 0 };
+        byDay[date].pnl += parseFloat(f.closedPnl);
+        byDay[date].trades += 1;
+      });
+      return byDay;
+    }
+
+    function groupByMonth(byDay, isPnl) {
+      const months = {};
+      Object.entries(byDay).forEach(([date, data]) => {
+        const month = date.substring(0, 7);
+        if (!months[month]) months[month] = { total: 0, trades: 0, days: {} };
+        if (isPnl) {
+          months[month].total += data.pnl;
+          months[month].trades += data.trades;
+          months[month].days[date] = data;
+        } else {
+          months[month].total += data;
+          months[month].days[date] = { amount: data };
+        }
+      });
+      return months;
+    }
+
+    function showTradeDetails(date) {
+      const dateStart = new Date(date + 'T00:00:00Z').getTime();
+      const dateEnd = new Date(date + 'T23:59:59Z').getTime();
+      const dayTrades = allFills.filter(f => f.time >= dateStart && f.time <= dateEnd && f.closedPnl && parseFloat(f.closedPnl) !== 0).sort((a, b) => b.time - a.time);
+      const totalPnl = dayTrades.reduce((sum, t) => sum + parseFloat(t.closedPnl), 0);
+      const totalFees = dayTrades.reduce((sum, t) => sum + parseFloat(t.fee || 0), 0);
+      const dateFormatted = new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+      document.getElementById('modal-title').textContent = dateFormatted;
+      let html = '<div class="modal-summary">';
+      html += '<div class="modal-summary-item"><div class="modal-summary-label">Realized P&L</div><div class="modal-summary-value ' + (totalPnl >= 0 ? 'positive' : 'negative') + '">' + formatUSDFull(totalPnl) + '</div></div>';
+      html += '<div class="modal-summary-item"><div class="modal-summary-label">Trades</div><div class="modal-summary-value">' + dayTrades.length + '</div></div>';
+      html += '<div class="modal-summary-item"><div class="modal-summary-label">Fees</div><div class="modal-summary-value negative">-$' + totalFees.toFixed(2) + '</div></div>';
+      html += '</div>';
+
+      if (dayTrades.length > 0) {
+        html += '<table class="trades-table"><thead><tr><th>Time</th><th>Coin</th><th>Side</th><th>Size</th><th>Price</th><th>P&L</th></tr></thead><tbody>';
+        dayTrades.forEach(t => {
+          const pnl = parseFloat(t.closedPnl);
+          const pnlClass = pnl >= 0 ? 'positive' : 'negative';
+          const sideClass = t.dir.toLowerCase().includes('short') ? 'short' : 'long';
+          html += '<tr><td>' + formatTime(t.time) + '</td><td class="trade-coin">' + t.coin + '</td><td><span class="trade-side ' + sideClass + '">' + t.dir + '</span></td><td>' + parseFloat(t.sz).toFixed(4) + '</td><td>$' + parseFloat(t.px).toLocaleString() + '</td><td class="trade-pnl ' + pnlClass + '">' + formatUSDFull(pnl) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+
+      document.getElementById('modal-content').innerHTML = html;
+      document.getElementById('modal').classList.add('active');
+    }
+
+    function showFundingDetails(date) {
+      const dateStart = new Date(date + 'T00:00:00Z').getTime();
+      const dateEnd = new Date(date + 'T23:59:59Z').getTime();
+      const dayFunding = allFunding.filter(f => f.time >= dateStart && f.time <= dateEnd);
+      const totalFunding = dayFunding.reduce((sum, f) => sum + parseFloat(f.delta.usdc), 0);
+      const byCoin = {};
+      dayFunding.forEach(f => { byCoin[f.delta.coin] = (byCoin[f.delta.coin] || 0) + parseFloat(f.delta.usdc); });
+      const dateFormatted = new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+      document.getElementById('modal-title').textContent = dateFormatted + ' - Funding';
+      let html = '<div class="modal-summary">';
+      html += '<div class="modal-summary-item"><div class="modal-summary-label">Total Funding</div><div class="modal-summary-value ' + (totalFunding >= 0 ? 'positive' : 'negative') + '">' + formatUSDFull(totalFunding) + '</div></div>';
+      html += '<div class="modal-summary-item"><div class="modal-summary-label">Payments</div><div class="modal-summary-value">' + dayFunding.length + '</div></div>';
+      html += '</div>';
+      html += '<h3 style="margin-bottom:10px;font-size:14px;color:#8b949e;">By Coin</h3>';
+      html += '<table class="trades-table"><thead><tr><th>Coin</th><th>Funding</th></tr></thead><tbody>';
+      Object.entries(byCoin).sort((a,b) => Math.abs(b[1]) - Math.abs(a[1])).forEach(([coin, amt]) => {
+        html += '<tr><td class="trade-coin">' + coin + '</td><td class="trade-pnl ' + (amt >= 0 ? 'positive' : 'negative') + '">' + formatUSDFull(amt) + '</td></tr>';
+      });
+      html += '</tbody></table>';
+      document.getElementById('modal-content').innerHTML = html;
+      document.getElementById('modal').classList.add('active');
+    }
+
+    function closeModal() { document.getElementById('modal').classList.remove('active'); }
+    document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+    function renderCalendar(months, containerId, isPnl, isCombined) {
+      const container = document.getElementById(containerId);
+      let grandTotal = 0, totalTrades = 0;
+      Object.values(months).forEach(m => { grandTotal += m.total; totalTrades += m.trades || 0; });
+      const totalClass = grandTotal >= 0 ? 'positive' : 'negative';
+
+      let html = '<div class="summary"><div class="summary-item"><div class="summary-label">' + (isCombined ? 'Total (Funding + P&L)' : isPnl ? 'Realized P&L' : 'Funding') + ' (90 Days)</div><div class="summary-value ' + totalClass + '">' + formatUSDFull(grandTotal) + '</div></div>';
+      if (isPnl || isCombined) html += '<div class="summary-item"><div class="summary-label">Trades</div><div class="summary-value" style="color:#e6edf3">' + totalTrades + '</div></div>';
+      html += '</div>';
+
+      Object.keys(months).sort().reverse().forEach(monthKey => {
+        const month = months[monthKey];
+        const [year, monthNum] = monthKey.split('-');
+        const monthName = new Date(year, monthNum - 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+        const mTotalClass = month.total >= 0 ? 'positive' : 'negative';
+
+        html += '<div class="month"><div class="month-header"><span class="month-name">' + monthName + ':</span><span class="month-total ' + mTotalClass + '">' + formatUSDFull(month.total) + '</span>';
+        if (month.trades) html += '<span class="month-info">(' + month.trades + ' trades)</span>';
+        html += '</div><div class="calendar-grid">';
+        dayNames.forEach(d => html += '<div class="day-header">' + d + '</div>');
+
+        const firstDay = new Date(year, monthNum - 1, 1);
+        const daysInMonth = new Date(year, monthNum, 0).getDate();
+        let startDay = firstDay.getDay();
+        startDay = startDay === 0 ? 6 : startDay - 1;
+        for (let i = 0; i < startDay; i++) html += '<div class="day empty"></div>';
+
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateStr = monthKey + '-' + String(d).padStart(2, '0');
+          const dayData = month.days[dateStr];
+          const amount = dayData ? (isPnl || isCombined ? dayData.pnl : dayData.amount) : 0;
+          const hasData = amount !== 0;
+          const clickFn = isPnl && !isCombined ? 'showTradeDetails' : 'showFundingDetails';
+
+          html += '<div class="day' + (hasData ? ' clickable" onclick="' + clickFn + '(\'' + dateStr + '\')"' : '"') + '>';
+          html += '<div class="day-number">' + d + '</div>';
+          if (hasData) {
+            html += '<div class="day-amount ' + (amount >= 0 ? 'positive' : 'negative') + '">' + formatUSD(amount) + '</div>';
+            if (dayData.trades) html += '<div class="day-trades">' + dayData.trades + ' trade' + (dayData.trades > 1 ? 's' : '') + '</div>';
+          }
+          html += '</div>';
+        }
+        html += '</div></div>';
+      });
+
+      if (isPnl && !isCombined) html += '<p style="color:#8b949e;font-size:12px;margin-top:20px;">Click on any day to see trade details</p>';
+      container.innerHTML = html;
+    }
+
+    async function init() {
+      try {
+        const [fundingData, fillsData] = await Promise.all([fetchFunding(), fetchFills()]);
+        allFunding = fundingData;
+        allFills = fillsData;
+
+        const fundingByDay = groupFundingByDay(fundingData);
+        renderCalendar(groupByMonth(fundingByDay, false), 'funding', false, false);
+
+        const pnlByDay = groupFillsByDay(fillsData);
+        renderCalendar(groupByMonth(pnlByDay, true), 'pnl', true, false);
+
+        const combinedByDay = {};
+        Object.entries(fundingByDay).forEach(([date, amt]) => {
+          if (!combinedByDay[date]) combinedByDay[date] = { pnl: 0, trades: 0 };
+          combinedByDay[date].pnl += amt;
+        });
+        Object.entries(pnlByDay).forEach(([date, data]) => {
+          if (!combinedByDay[date]) combinedByDay[date] = { pnl: 0, trades: 0 };
+          combinedByDay[date].pnl += data.pnl;
+          combinedByDay[date].trades += data.trades;
+        });
+        renderCalendar(groupByMonth(combinedByDay, true), 'combined', true, true);
+      } catch (err) {
+        document.querySelectorAll('.tab-content').forEach(c => { c.innerHTML = '<div class="loading">Error: ' + err.message + '</div>'; });
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
