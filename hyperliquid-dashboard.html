@@ -206,21 +206,6 @@
       event.target.value = ''; // Reset file input
     }
 
-    // Pre-populate example note for demo
-    (function initExampleNote() {
-      const notes = JSON.parse(localStorage.getItem('hl-journal') || '{}');
-      if (!notes['2026-01-09']) {
-        notes['2026-01-09'] = `Ok so last night I managed to take another 0.5BTC off the table as BTC grinded down to 89,500. It trended back up and is now trading around 91.3k. ETH also bounced from the low (missed my limit order to take profit by $4, but it is what it is).
-
-As of now, I think the bounce is due to shorts getting liquidated hence the bounce was violent imo. Trend is still down I feel, no bullish factors, no marginal buyers left to buy, hence will still continue grinding down.
-
-All my tweeter posts that I follow is calling for 75-85k levels for BTC, but since everyone is calling for this level I highly doubt it will get there. Maybe touching the previous low 86k would be good enough for me.
-
-Right now both BTC and ETH has touched the lower high, and if I am right it should bounce up and then eventually go down.`;
-        localStorage.setItem('hl-journal', JSON.stringify(notes));
-      }
-    })();
-
     // Main tab switching
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
