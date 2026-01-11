@@ -52,6 +52,8 @@ A **single-file HTML dashboard** that visualizes Hyperliquid trading data in cal
 ### API Pagination (Important!)
 The Hyperliquid API returns max 500 records per request. The dashboard uses pagination:
 
+> **CRITICAL - Data Preservation:** The dashboard MUST always fetch ALL historical data starting from 2024-01-01, regardless of how much time passes. Even in 2027 or beyond, users should still see their 2024 data. The pagination loops until ALL records are fetched - never stop early or only fetch recent data. Old data must NEVER be lost or replaced.
+
 ```javascript
 // Fetch ALL data with pagination
 async function fetchFunding() {
@@ -86,7 +88,7 @@ async function fetchFunding() {
 |------|---------|
 | `hyperliquid-dashboard.html` | The entire dashboard (single file) |
 | `README.md` | Basic usage docs |
-| `DASHBOARD-REFERENCE.md` | This file - complete technical reference |
+| `HYPERLIQUID-DASHBOARD.md` | This file - complete technical reference |
 
 ### Desktop Shortcut
 - Location: `/Users/degenchief/Desktop/Hyperliquid Dashboard.html`
@@ -111,6 +113,17 @@ async function fetchFunding() {
 **Cause:** localStorage cleared, or different browser used
 **Fix:** Use Export/Import feature for backup. Export regularly!
 
+### 4. Funding Data Grouped by Wrong Date (Jan 10, 2026)
+**Symptom:** Today's funding shows $0, but yesterday shows inflated amount
+**Cause:** Dashboard used UTC dates (`toISOString().split('T')[0]`) instead of local HKT timezone
+**Fix:** Added local timezone helpers:
+```javascript
+function toLocalDateStr(timestamp) {
+  const d = new Date(timestamp);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+```
+
 ---
 
 ## What NOT to Do
@@ -119,6 +132,7 @@ async function fetchFunding() {
 2. **NEVER** commit the localStorage data to git
 3. **NEVER** add back a "Clear All Journal" button (user explicitly removed it)
 4. **NEVER** use `startTime: 0` for API calls (causes missing recent data)
+5. **NEVER** change pagination to only fetch recent data - ALL historical data from 2024 onwards must always be fetched and displayed
 
 ---
 
@@ -160,4 +174,4 @@ git log --oneline -10
 
 ---
 
-*Last updated: 2026-01-09*
+*Last updated: 2026-01-11*
