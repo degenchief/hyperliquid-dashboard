@@ -36,6 +36,7 @@ A **single-file HTML dashboard** that visualizes Hyperliquid trading data in cal
 ### Journal Backup System
 - **Export Journal** button - Downloads JSON backup file
 - **Import Journal** button - Restores from backup (merges with existing)
+- **Last backup indicator** - Shows time since last export (turns red if >7 days)
 - User explicitly asked to REMOVE the "Clear All" button for safety
 
 ---
@@ -102,6 +103,19 @@ async function fetchFunding() {
 **Symptom:** Recent days (e.g., Jan 6-9) show no funding amounts
 **Cause:** API returns 500 records; if using `startTime: 0`, you get oldest data, not recent
 **Fix:** Use pagination starting from a reasonable date (2024-01-01)
+
+### 1b. Claude Keeps Getting Wrong API Data (IMPORTANT FOR CLAUDE)
+**Symptom:** Claude queries API and says "no data after Jan 8" or similar
+**Cause:** When using `startTime` parameter, API returns oldest 500 records from that date forward, NOT the most recent data
+**Fix:** To get RECENT funding data, query WITHOUT `startTime`:
+```bash
+# WRONG - gets old data first, stops at 500 records
+curl -X POST https://api.hyperliquid.xyz/info -d '{"type": "userFunding", "user": "WALLET", "startTime": 123456}'
+
+# CORRECT - gets most recent data (up to 500 entries)
+curl -X POST https://api.hyperliquid.xyz/info -d '{"type": "userFunding", "user": "WALLET"}'
+```
+**Note:** This is a recurring mistake - Claude has made this error multiple times. Always query WITHOUT startTime first to get recent data.
 
 ### 2. Can't Click Days Without Trades
 **Symptom:** Empty days aren't clickable for journaling
@@ -174,4 +188,4 @@ git log --oneline -10
 
 ---
 
-*Last updated: 2026-01-11*
+*Last updated: 2026-01-11 (added last backup indicator)*

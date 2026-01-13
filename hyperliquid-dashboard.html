@@ -92,6 +92,7 @@
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
     <h1 style="margin:0;">Hyperliquid Dashboard</h1>
     <div class="journal-controls">
+      <span id="last-export" style="font-size: 11px; color: #8b949e; margin-right: 10px;"></span>
       <button class="journal-ctrl-btn" onclick="exportJournal()" title="Download backup of all journal entries">Export Journal</button>
       <button class="journal-ctrl-btn" onclick="document.getElementById('import-file').click()" title="Restore journal from backup file">Import Journal</button>
       <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJournal(event)">
@@ -194,7 +195,46 @@
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+
+      // Save last export timestamp
+      localStorage.setItem('hl-journal-last-export', new Date().toISOString());
+      updateLastExportDisplay();
+
       alert('Journal exported! ' + noteCount + ' entries saved.');
+    }
+
+    function updateLastExportDisplay() {
+      const lastExport = localStorage.getItem('hl-journal-last-export');
+      const el = document.getElementById('last-export');
+      if (lastExport && el) {
+        const date = new Date(lastExport);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+        let timeAgo;
+        if (diffDays === 0) {
+          const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+          if (diffHours === 0) {
+            const diffMins = Math.floor(diffMs / (1000 * 60));
+            timeAgo = diffMins <= 1 ? 'just now' : diffMins + ' mins ago';
+          } else {
+            timeAgo = diffHours + ' hour' + (diffHours > 1 ? 's' : '') + ' ago';
+          }
+        } else if (diffDays === 1) {
+          timeAgo = 'yesterday';
+        } else if (diffDays < 7) {
+          timeAgo = diffDays + ' days ago';
+        } else {
+          timeAgo = date.toLocaleDateString();
+        }
+
+        el.textContent = 'Last backup: ' + timeAgo;
+        el.style.color = diffDays > 7 ? '#f85149' : '#8b949e';
+      } else if (el) {
+        el.textContent = 'No backup yet';
+        el.style.color = '#f85149';
+      }
     }
 
     function importJournal(event) {
@@ -622,6 +662,7 @@
     }
 
     init();
+    updateLastExportDisplay();
   </script>
 </body>
 </html>
