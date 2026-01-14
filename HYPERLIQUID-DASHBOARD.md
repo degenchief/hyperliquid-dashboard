@@ -32,6 +32,7 @@ A **single-file HTML dashboard** that visualizes Hyperliquid trading data in cal
 - Days with notes show 📝 indicator and orange border
 - **ALL days are clickable** for journaling (not just days with trades)
 - Stored in browser's localStorage (key: `hl-journal`)
+- **Syncs with Jarvis (VPS)** - See "Jarvis Sync" section below
 
 ### Journal Backup System
 - **Export Journal** button - Downloads JSON backup file
@@ -80,6 +81,24 @@ async function fetchFunding() {
 - **localStorage key:** `hl-journal`
 - **Format:** `{ "2026-01-09": "My trading thoughts...", ... }`
 - **Export format:** JSON with metadata (exportDate, noteCount, entries)
+
+### Jarvis Sync (Added Jan 13, 2026)
+The journal syncs with Clement's AI assistant (Jarvis) on VPS:
+- **VPS API:** `http://129.212.229.56:18796`
+- **Sync TO VPS:** Immediately when user saves an entry
+- **Sync FROM VPS:** On page load (VPS is source of truth)
+- **Architecture:** Dashboard ↔ VPS ↔ Jarvis all share the same data
+- **Use cases:**
+  - Tell Jarvis "How was I feeling trading on Jan 10?" → Reads journal
+  - Tell Jarvis "Add to journal: felt cautious" → Appends to today's entry
+  - Dashboard reflects changes Jarvis makes, and vice versa
+
+**Sync functions in `hyperliquid-dashboard.html`:**
+```javascript
+const JOURNAL_API = "http://129.212.229.56:18796";
+syncJournalToVPS()   // Push to VPS on save
+syncJournalFromVPS() // Pull from VPS on load (replaces localStorage)
+```
 
 ---
 
@@ -138,6 +157,20 @@ function toLocalDateStr(timestamp) {
 }
 ```
 
+### 5. Journal Sync Not Deleting Entries (Jan 13, 2026)
+**Symptom:** Deleted journal entries on VPS still appear in dashboard after refresh
+**Cause:** Original sync used merge logic `{ ...existing, ...data.entries }` which only added/updated but never removed entries
+**Fix:** Changed `syncJournalFromVPS()` to make VPS the source of truth - now replaces localStorage entirely instead of merging:
+```javascript
+// OLD (buggy) - merge kept deleted entries
+const merged = { ...existing, ...data.entries };
+localStorage.setItem('hl-journal', JSON.stringify(merged));
+
+// NEW (fixed) - VPS is source of truth
+localStorage.setItem('hl-journal', JSON.stringify(data.entries));
+```
+**Lesson:** When syncing with a remote source of truth, replace don't merge.
+
 ---
 
 ## What NOT to Do
@@ -147,6 +180,7 @@ function toLocalDateStr(timestamp) {
 3. **NEVER** add back a "Clear All Journal" button (user explicitly removed it)
 4. **NEVER** use `startTime: 0` for API calls (causes missing recent data)
 5. **NEVER** change pagination to only fetch recent data - ALL historical data from 2024 onwards must always be fetched and displayed
+6. **NEVER** change `syncJournalFromVPS()` back to merge logic - VPS must be source of truth (see Issue #5)
 
 ---
 
@@ -163,8 +197,8 @@ function toLocalDateStr(timestamp) {
 
 ## Future Ideas (KIV - Keep In View)
 
-- AI analysis of trading journal to find patterns
-- Cloud sync for journal backup
+- AI analysis of trading journal to find patterns (Jarvis could help with this now)
+- ~~Cloud sync for journal backup~~ → **DONE** via Jarvis sync (Jan 13, 2026)
 - Mobile-friendly version
 
 ---
@@ -188,4 +222,4 @@ git log --oneline -10
 
 ---
 
-*Last updated: 2026-01-11 (added last backup indicator)*
+*Last updated: 2026-01-13 (added Jarvis sync for trading journal)*

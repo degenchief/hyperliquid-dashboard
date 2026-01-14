@@ -162,6 +162,8 @@
         delete notes[date];
       }
       localStorage.setItem('hl-journal', JSON.stringify(notes));
+      // Sync to VPS immediately
+      syncJournalToVPS();
     }
 
     function hasNote(date) {
@@ -172,6 +174,37 @@
     function getAllNoteDates() {
       const notes = JSON.parse(localStorage.getItem('hl-journal') || '{}');
       return Object.keys(notes);
+    }
+
+    // === Jarvis Sync Functions ===
+    const JOURNAL_API = "http://129.212.229.56:18796";
+
+    async function syncJournalToVPS() {
+      try {
+        const notes = JSON.parse(localStorage.getItem('hl-journal') || '{}');
+        if (Object.keys(notes).length === 0) return;
+        await fetch(JOURNAL_API + "/api/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ entries: notes })
+        });
+        console.log("[Journal] Synced to VPS:", Object.keys(notes).length, "entries");
+      } catch (e) {
+        console.warn("[Journal] Sync to VPS failed:", e.message);
+      }
+    }
+
+    async function syncJournalFromVPS() {
+      try {
+        const res = await fetch(JOURNAL_API + "/api/journal");
+        if (!res.ok) throw new Error("API returned " + res.status);
+        const data = await res.json();
+        // VPS is source of truth - replace localStorage entirely
+        localStorage.setItem('hl-journal', JSON.stringify(data.entries));
+        console.log("[Journal] Pulled from VPS:", Object.keys(data.entries).length, "entries");
+      } catch (e) {
+        console.warn("[Journal] Pull from VPS failed:", e.message);
+      }
     }
 
     function exportJournal() {
@@ -663,6 +696,12 @@
 
     init();
     updateLastExportDisplay();
+
+    // Jarvis Sync: Pull entries from VPS on load
+    syncJournalFromVPS();
+
+    // Jarvis Sync: Push entries to VPS on tab close
+    window.addEventListener('beforeunload', syncJournalToVPS);
   </script>
 </body>
 </html>
